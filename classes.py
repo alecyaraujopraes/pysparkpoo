@@ -1,7 +1,8 @@
 from pyspark.sql import SparkSession, DataFrame
-from pyspark.sql.functions import struct, col, explode, concat, concat_ws
+from pyspark.sql.functions import struct, col, explode, concat, concat_ws, rank
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, BooleanType, DoubleType
 from datetime import datetime
+from pyspark.sql.window import Window
 
 current_dateTime = datetime.now()
 
@@ -148,9 +149,18 @@ class Aggregator:
         Returns:
             df (DataFrame): The dataframe with the most popular route by company.
         """
-        pass
+        df = df.groupBy("route", "travelCompanyName").sum("availableSeats")
 
-    def aggregate_data():
+        windowSpec = Window.partitionBy("travelCompanyName").orderBy(col("sum(availableSeats)").asc())
+
+        df_ranked = df.withColumn("rank", rank().over(windowSpec))
+
+        df_most_popular_routes = df_ranked.filter(col("rank") == 1).drop("rank", "sum(availableSeats)")
+
+        return df_most_popular_routes
+
+
+    def aggregate_data(self, df: DataFrame)-> DataFrame:
         """Receive the processed DataFrame, generate the requested aggregations and return dataFrames with the insights.
         
         Parameters:
@@ -169,9 +179,21 @@ class Aggregator:
 
 
 class Writer:
-    def write_data():
-        """Save data in parquet format partitioned by originState and destinationState."""
-        pass
+    def write_data(self, name: str, df: DataFrame)-> None:
+        """Save data in parquet format partitioned by originState and destinationState.
+
+        Parameters:
+            df (DataFrame): The dataframe to be saved.
+            name (str): The name of folder inside results to store the parquet file.
+        
+        Returns:
+            None
+        """
+        if "destinationState" in df.columns and "originState" in df.columns:
+            df.write.mode("overwrite").partitionBy("originState", "destinationState").parquet(f"results/{name}/")
+        else:
+            df.write.mode("overwrite").parquet(f"results/{name}/")
+ 
 
 def main():
     event = EventProcessor()
@@ -184,6 +206,12 @@ def main():
     df_sum.show()
     df_pop.show()
 
-# Ensure the main function runs when the script is executed
+    writer = Writer()
+    writer.write_data("general", df)
+    writer.write_data("avg", df_avg)
+    writer.write_data("sum", df_sum)
+    writer.write_data("pop", df_pop)
+
+
 if __name__ == "__main__":
     main()

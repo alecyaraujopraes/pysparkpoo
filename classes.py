@@ -1,37 +1,47 @@
+from pyspark.sql import SparkSession
 
-class EventProcessor():
-    def init:
-        self.ll = ll
-    
-    def read_json():
-        pass
-        return
+
+spark = SparkSession \
+            .builder \
+            .appName("example") \
+            .getOrCreate()
+
+
+class EventProcessor:
+    def init():
+        self.path = path
+        
+    def read_json(self, path: str):
+        spark_df = spark.read.option("multiline","true").json(path)
+        return spark_df
 
     def read_array():
         pass
 
-    def create_columns
-        departure_time():
-        """ Combinação de departureDate e departureHour."""
-        pass
+    def create_columns():
+        #departure_time():
+        #""" Combinação de departureDate e departureHour."""
+        #pass
     
-        arrival_datetime():
-        """ Combinação de arrivalDate e arrivalHour."""
-        pass
+        #arrival_datetime():
+        #""" Combinação de arrivalDate e arrivalHour."""
+        #pass
 
-        route: Combinação originCity e destinationCity.
+        #route: Combinação originCity e destinationCity.
+        pass
     
     def filter():
-        viagens futuras
-        viagens com availableSeats > 0
+        #viagens futuras
+        #viagens com availableSeats > 0
+        pass
     
     def process_events():
         " Leia o JSON, Normalize os dados and Retorne o DataFrame processado."
         pass
 
 
-class Aggregator():
-    def init:
+class Aggregator:
+    def init():
         pass
 
     def avg_price_per_route_and_class():
@@ -51,8 +61,8 @@ class Aggregator():
         pass
 
 
-class Writer():
-    def init:
+class Writer:
+    def init():
         pass
 
     def write_data():
@@ -61,11 +71,12 @@ class Writer():
 
 def main():
     # Create an instance of the EventProcessor with a specific event name
-    event = EventProcessor("UserSignup")
-    
+    event = EventProcessor()
+    df = event.read_json("input_data2.json")
+    df.show()
     # Call methods on the event processor instance
-    event.process_event()
-    event.log_event()
+    # event.process_event()
+    # event.log_event()
 
 # Ensure the main function runs when the script is executed
 if __name__ == "__main__":

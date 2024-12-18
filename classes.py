@@ -1,82 +1,188 @@
-from pyspark.sql import SparkSession
+from pyspark.sql import SparkSession, DataFrame
+from pyspark.sql.functions import struct, col, explode, concat, concat_ws
+from pyspark.sql.types import StructType, StructField, StringType, IntegerType, BooleanType, DoubleType
+from datetime import datetime
 
+current_dateTime = datetime.now()
 
 spark = SparkSession \
             .builder \
-            .appName("example") \
+            .appName("pipeline") \
             .getOrCreate()
 
 
 class EventProcessor:
     def init():
         self.path = path
+
+
+    def read_json(self, path: str)-> DataFrame:
+        """Read the json in the file path and transform it in a spark dataframe
         
-    def read_json(self, path: str):
+        Parameters:
+            path (str): The string which is the file path to json.
+        
+        Returns:
+            df (DataFrame): The dataframe from json file.
+        """
         spark_df = spark.read.option("multiline","true").json(path)
-        return spark_df
 
-    def read_array():
-        pass
+        df_flattened = spark_df.withColumn("searchItem", explode(col("data.searchItemsList")))
+        
+        df_flattened = df_flattened.select(
+            col("id"),
+            col("timestamp"),
+            col("live"),
+            col("organic"),
+            col("data.clientId").alias("clientId"),
+            col("data.platform").alias("platform"),
+            col("searchItem.travelPrice").cast(DoubleType()).alias("travelPrice"),
+            col("searchItem.travelCompanyId").alias("travelCompanyId"),
+            col("searchItem.travelCompanyName").alias("travelCompanyName"),
+            col("searchItem.distributorIdentifier").alias("distributorIdentifier"),
+            col("searchItem.departureDate").alias("departureDate"),
+            col("searchItem.departureHour").alias("departureHour"),
+            col("searchItem.arrivalDate").alias("arrivalDate"),
+            col("searchItem.arrivalHour").alias("arrivalHour"),
+            col("searchItem.originId").alias("originId"),
+            col("searchItem.originCity").alias("originCity"),
+            col("searchItem.originState").alias("originState"),
+            col("searchItem.destinationId").alias("destinationId"),
+            col("searchItem.destinationCity").alias("destinationCity"),
+            col("searchItem.destinationState").alias("destinationState"),
+            col("searchItem.serviceClass").alias("serviceClass"),
+            col("searchItem.serviceCode").alias("serviceCode"),
+            col("searchItem.availableSeats").alias("availableSeats"),
+            col("searchItem.price").cast(DoubleType()).alias("price"),
+            col("searchItem.referencePrice").cast(DoubleType()).alias("referencePrice"),
+            col("searchItem.originalPrice").cast(DoubleType()).alias("originalPrice"),
+            col("searchItem.discountPercentageApplied").cast(DoubleType()).alias("discountPercentageApplied"),
+            col("searchItem.tripId").alias("tripId"),
+            col("searchItem.groupId").alias("groupId")
+        )
 
-    def create_columns():
-        #departure_time():
-        #""" Combinação de departureDate e departureHour."""
-        #pass
-    
-        #arrival_datetime():
-        #""" Combinação de arrivalDate e arrivalHour."""
-        #pass
+        return df_flattened
 
-        #route: Combinação originCity e destinationCity.
-        pass
-    
-    def filter():
-        #viagens futuras
-        #viagens com availableSeats > 0
-        pass
-    
-    def process_events():
-        " Leia o JSON, Normalize os dados and Retorne o DataFrame processado."
-        pass
+
+    def create_columns(self, df: DataFrame)-> DataFrame:
+        """Add columns departure_datetime, arrival_datetime and route to dataframe.
+        
+        Parameters:
+            df (DataFrame): The initial dataframe.
+        
+        Returns:
+            df (DataFrame): The dataframe with the new columns.
+        """
+        df = df.withColumn("departure_datetime", concat_ws(" ", df.departureDate, df.departureHour))
+        df = df.withColumn("arrival_datetime", concat_ws(" ", df.arrivalDate, df.arrivalHour))
+        df = df.withColumn("route", concat_ws(" ", df.originCity, df.destinationCity))
+
+        return df
+
+
+    def filter(self, df: DataFrame)-> DataFrame:
+        """Filter the rows from the dataframe given by the future deapartures and available seats.
+        
+        Parameters:
+            df (DataFrame): The initial dataframe.
+        
+        Returns:
+            df (DataFrame): The filtered dataframe.
+        """
+        df = df.filter(df.departure_datetime > current_dateTime)
+        df = df.filter(df.availableSeats > 0)
+        
+        return df
+
+
+    def process_events(self, path: str)-> DataFrame:
+        """Read the json in the path, normalize the data and return the proccessed dataframe. Using the methods read_json, create_columns and filter.
+        
+        Parameters:
+            path (str): The string which is the file path to json.
+        
+        Returns:
+            df (DataFrame): The dataframe from json file.
+        """
+        df = self.read_json(path)
+        df = self.create_columns(df)
+        df = self.filter(df)
+        return df
 
 
 class Aggregator:
-    def init():
-        pass
+    def avg_price_per_route_and_class(self, df: DataFrame)-> DataFrame:
+        """Calculate the average price by route and class of service.
+        
+        Parameters:
+            df (DataFrame): The full dataframe.
+        
+        Returns:
+            df (DataFrame): The dataframe with average price by route and service.
+        """
+        df = df.groupBy("route", "serviceClass").avg("price")
 
-    def avg_price_per_route_and_class():
-        """Calcular o preço médio por rota e classe de serviço."""
-        pass
+        return df
 
-    def sum_seat_aviable_per_route_and_company():
-        """Determinar o total de assentos disponíveis por rota e companhia."""
-        pass
 
-    def most_popular_route_per_company():
-        """Identificar a rota mais popular por companhia de viagem."""
+    def sum_seat_aviable_per_route_and_company(self, df: DataFrame)-> DataFrame:
+        """Determine the total available seats by route and company.
+        
+        Parameters:
+            df (DataFrame): The full dataframe.
+        
+        Returns:
+            df (DataFrame): The dataframe with total available seats by route and company.
+        """
+        df = df.groupBy("route", "travelCompanyName").sum("availableSeats")
+
+        return df
+
+
+    def most_popular_route_per_company(self, df: DataFrame)-> DataFrame:
+        """Identify the most popular route by travel company.
+        
+        Parameters:
+            df (DataFrame): The full dataframe.
+        
+        Returns:
+            df (DataFrame): The dataframe with the most popular route by company.
+        """
         pass
 
     def aggregate_data():
-        """Receba o DataFrame processado, Gere as agregações solicitadas e Retorne um DataFrame com os insights."""
-        pass
+        """Receive the processed DataFrame, generate the requested aggregations and return dataFrames with the insights.
+        
+        Parameters:
+            df (DataFrame): The full dataframe.
+        
+        Returns:
+            df_avg (DataFrame): The dataframe with average price by route and service.
+            df_sum (DataFrame): The dataframe with total available seats by route and company.
+            df_pop (DataFrame): The dataframe with the most popular route by company.
+        """
+        df_avg = self.avg_price_per_route_and_class(df)
+        df_sum = self.sum_seat_aviable_per_route_and_company(df)
+        df_pop = self.most_popular_route_per_company(df)
+
+        return df_avg, df_sum, df_pop
 
 
 class Writer:
-    def init():
-        pass
-
     def write_data():
         """Save data in parquet format partitioned by originState and destinationState."""
         pass
 
 def main():
-    # Create an instance of the EventProcessor with a specific event name
     event = EventProcessor()
-    df = event.read_json("input_data2.json")
+    df = event.process_events("input_data.json")
     df.show()
-    # Call methods on the event processor instance
-    # event.process_event()
-    # event.log_event()
+
+    agg = Aggregator()
+    df_avg, df_sum, df_pop = agg.aggregate_data(df)
+    df_avg.show()
+    df_sum.show()
+    df_pop.show()
 
 # Ensure the main function runs when the script is executed
 if __name__ == "__main__":
